@@ -21,10 +21,12 @@ It tracks how objects are used in real-time, logs interactions, and visualizes b
 ```
 SenseLog/
 │── iot/                  # Arduino & ESP32 firmware
-│   ├── esp32cam/
-│   │    └── esp32cam.ino
 │   ├── main_uno/
 │   │    └── main_uno.ino
+│   ├──i2c_scanner/
+│   │    └── i2c_scanner.ino
+│   ├── esp32cam/
+│   │    └── esp32cam.ino
 │
 │── python/
 │   ├── logger/
