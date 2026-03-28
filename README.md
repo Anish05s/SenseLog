@@ -134,8 +134,8 @@ http://localhost:5000
 
 ## 🧑‍💻 Author
 
-**Anish Sarkar**
-B.Tech CSE Student | IoT & Blockchain Enthusiast
+**Anish Sarkar & Arya Ghosh**
+B.Tech CSE Student | IoT, AiML & Blockchain Enthusiast
 
 ---
 
