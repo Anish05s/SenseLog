@@ -7,122 +7,128 @@
 #include <LiquidCrystal_I2C.h>
 #include <RTClib.h>
 
-#define MPU 0x68  // MPU6050 address
+// ------------------ PINS ------------------
+#define PIR_PIN   2
+#define TRIG_PIN  3
+#define ECHO_PIN  4
 
+// ------------------ SETTINGS ------------------
+#define BASELINE_CM   12
+#define PICKUP_CM     25
+#define COOLDOWN_MS 1500   // reduced for faster response
+
+// ------------------ OBJECTS ------------------
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 RTC_DS3231 rtc;
 
-// Motion settings
-const float THRESHOLD = 0.5;        // how much movement = pickup
-const unsigned long COOLDOWN = 5000; // 5 sec between events
+// ------------------ VARIABLES ------------------
 unsigned long lastEventTime = 0;
-bool isPickedUp = false;
+bool objectPresent = true;
+bool pirTriggered = false;
 
-// ------------------------------------------------
-void setupMPU() {
-  Wire.beginTransmission(MPU);
-  Wire.write(0x6B);
-  Wire.write(0); // wake up
-  Wire.endTransmission(true);
-  delay(100);
+// ------------------ DISTANCE ------------------
+float getDistance() {
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  return duration * 0.034 / 2.0;
 }
 
-float getTotalMovement() {
-  Wire.beginTransmission(MPU);
-  Wire.write(0x3B);
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU, 6, true);
-
-  int16_t ax = Wire.read() << 8 | Wire.read();
-  int16_t ay = Wire.read() << 8 | Wire.read();
-  int16_t az = Wire.read() << 8 | Wire.read();
-
-  float ax_g = ax / 16384.0;
-  float ay_g = ay / 16384.0;
-  float az_g = az / 16384.0;
-
-  // Total acceleration minus gravity (1g)
-  float total = sqrt(ax_g*ax_g + ay_g*ay_g + az_g*az_g) - 1.0;
-  return abs(total);
+// ------------------ TIME FORMAT ------------------
+String getTime(DateTime dt) {
+  String s = "";
+  if (dt.hour() < 10) s += "0"; s += dt.hour(); s += ":";
+  if (dt.minute() < 10) s += "0"; s += dt.minute(); s += " ";
+  if (dt.day() < 10) s += "0"; s += dt.day(); s += "/";
+  if (dt.month() < 10) s += "0"; s += dt.month();
+  return s;
 }
 
-// ------------------------------------------------
+// ------------------ EVENT ------------------
+void sendEvent(String type, String timeStr) {
+  Serial.println("EVENT,book," + type + "," + timeStr);
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+
+  if (type == "PERSON")      lcd.print("Person detected");
+  if (type == "PICKED_UP")   lcd.print("Book picked up");
+  if (type == "PUT_DOWN")    lcd.print("Book put down");
+
+  lcd.setCursor(0, 1);
+  lcd.print(timeStr);
+}
+
+// ------------------ SETUP ------------------
 void setup() {
   Serial.begin(9600);
   Wire.begin();
 
-  // LCD
+  pinMode(PIR_PIN, INPUT);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+
   lcd.init();
   lcd.backlight();
-  lcd.setCursor(0, 0); lcd.print("Objects That");
-  lcd.setCursor(0, 1); lcd.print("Remember v1.0");
-  delay(2000);
-  lcd.clear();
 
-  // RTC
   if (!rtc.begin()) {
-    lcd.setCursor(0, 0); lcd.print("RTC ERROR!");
+    lcd.print("RTC ERROR!");
     while (1);
   }
-  // Uncomment once to set time, then comment out again
-  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
-  // MPU
-  setupMPU();
+  // Uncomment ONCE → upload → comment again
+  // rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
 
-  lcd.setCursor(0, 0); lcd.print("System Ready!");
-  Serial.println("System Ready!");
-  delay(1500);
+  lcd.print("System Ready");
+  delay(2000);
   lcd.clear();
-  lcd.setCursor(0, 0); lcd.print("Waiting...");
 }
 
-// ------------------------------------------------
+// ------------------ LOOP ------------------
 void loop() {
-  float movement = getTotalMovement();
   unsigned long now = millis();
   DateTime rtcNow = rtc.now();
   String timeStr = getTime(rtcNow);
 
-  // Detect PICKUP
-  if (!isPickedUp &&
-      movement > THRESHOLD &&
-      (now - lastEventTime) > COOLDOWN) {
+  int pirVal = digitalRead(PIR_PIN);
 
-    isPickedUp = true;
+  // -------- PERSON PRIORITY --------
+  if (pirVal == HIGH && !pirTriggered && (now - lastEventTime) > COOLDOWN_MS) {
+    pirTriggered = true;
     lastEventTime = now;
+    sendEvent("PERSON", timeStr);
 
-    Serial.println("EVENT,notebook-001,PICKUP," + timeStr);
-
-    lcd.clear();
-    lcd.setCursor(0, 0); lcd.print("Picked up!");
-    lcd.setCursor(0, 1); lcd.print(timeStr);
+    delay(1500);   // ignore ultrasonic temporarily
+    return;
   }
 
-  // Detect PUTDOWN (still for 4 seconds)
-  if (isPickedUp &&
-      movement < 0.1 &&
-      (now - lastEventTime) > 4000) {
-
-    isPickedUp = false;
-    lastEventTime = now;
-
-    Serial.println("EVENT,notebook-001,PUTDOWN," + timeStr);
-
-    lcd.clear();
-    lcd.setCursor(0, 0); lcd.print("Last used:");
-    lcd.setCursor(0, 1); lcd.print(timeStr);
+  if (pirVal == LOW) {
+    pirTriggered = false;
   }
 
-  delay(100);
-}
+  // -------- ULTRASONIC --------
+  float dist = getDistance();
 
-// ------------------------------------------------
-String getTime(DateTime dt) {
-  String s = "";
-  if (dt.hour()   < 10) s += "0"; s += dt.hour();   s += ":";
-  if (dt.minute() < 10) s += "0"; s += dt.minute(); s += " ";
-  if (dt.day()    < 10) s += "0"; s += dt.day();    s += "/";
-  if (dt.month()  < 10) s += "0"; s += dt.month();
-  return s;
+  // PICKED UP
+  if (objectPresent && dist > PICKUP_CM && dist < 200 &&
+      (now - lastEventTime) > COOLDOWN_MS) {
+    objectPresent = false;
+    lastEventTime = now;
+    sendEvent("PICKED_UP", timeStr);
+  }
+
+  // PUT DOWN
+  if (!objectPresent && dist < BASELINE_CM &&
+      (now - lastEventTime) > COOLDOWN_MS) {
+    objectPresent = true;
+    lastEventTime = now;
+    sendEvent("PUT_DOWN", timeStr);
+  }
+
+  delay(200);
 }
