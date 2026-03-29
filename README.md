@@ -6,7 +6,7 @@ It tracks how objects are used in real-time, logs interactions, and visualizes b
 
 ----
 that how it work 
-## 🚀 Features
+## 🚀 Features.
 
 * 📦 Detects object pickup and placement using multiple sensors
 * 🧠 Logs interaction events with timestamps via serial communication
