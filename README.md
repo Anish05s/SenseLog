@@ -4,7 +4,7 @@
 
 It tracks how objects are used in real-time, logs interactions, and visualizes behavior — effectively **bridging the gap between the physical and digital world**.
 
----
+----
 
 ## 🚀 Features
 
