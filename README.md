@@ -3,7 +3,7 @@
 **SenseLog** is an IoT-based system that gives physical objects **memory and awareness** using Arduino and a Python-powered dashboard.
 
 It tracks how objects are used in real-time, logs interactions, and visualizes behavior — effectively **bridging the gap between the physical and digital world**.
-<<<<<<< HEAD  
+<<<<<<< HEAD  .
 add by arya and anish. 
 ---
 
