@@ -1,6 +1,6 @@
 # ================================================
-# logger.py
-# Reads events from Arduino Uno and saves to CSV
+# logger.py - Objects That Remember
+# Reads events from Arduino Uno, saves to CSV and grabs snapshots
 # ================================================
 # First run this in terminal/cmd:
 #   pip install pyserial pandas
@@ -12,70 +12,87 @@
 import serial
 import csv
 import os
+import requests
+import time
 from datetime import datetime
 
-# ---- CHANGE THIS TO YOUR ARDUINO COM PORT ----
-# How to find it: Arduino IDE → Tools → Port
-# It will say something like COM3 or COM5
-PORT = "COM3"
-# ----------------------------------------------
-
+PORT     = "COM3"          # Arduino Uno port
 BAUD     = 9600
 CSV_FILE = "events.csv"
+ESP32_IP = "192.168.1.37"  # change to your ESP32-CAM IP
+SNAP_DIR = "snapshots"
 
-def setup_csv():
-    # Create the file with headers if it doesn't exist
+def setup():
+    # Create CSV with headers if needed
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["object_id", "event_type", "timestamp"])
+            csv.writer(f).writerow(["object_id", "event_type", "timestamp"])
         print(f"Created {CSV_FILE}")
+    # Create snapshots folder
+    if not os.path.exists(SNAP_DIR):
+        os.makedirs(SNAP_DIR)
+        print(f"Created {SNAP_DIR}/")
+
+def grab_snapshot(timestamp):
+    # Capture a photo from ESP32-CAM
+    try:
+        url = f"http://{ESP32_IP}/capture"
+        r = requests.get(url, timeout=10)
+        if r.status_code == 200:
+            fname = timestamp.replace(":", "-").replace(" ", "_") + ".jpg"
+            path  = os.path.join(SNAP_DIR, fname)
+            with open(path, 'wb') as f:
+                f.write(r.content)
+            print(f"  Snapshot saved: {fname}")
+    except Exception as e:
+        print(f"  Snapshot failed: {e}")
 
 def main():
-    setup_csv()
+    setup()
 
-    print("=" * 40)
-    print("  Objects That Remember — Logger")
-    print("=" * 40)
+    print("=" * 42)
+    print("  Objects That Remember - Logger v2")
+    print("=" * 42)
     print(f"Connecting to Arduino on {PORT}...")
 
     try:
         ser = serial.Serial(PORT, BAUD, timeout=1)
-        print("Connected! Pick up your object to test.")
-        print("Press Ctrl+C to stop.\n")
-    except Exception as e:
+        print("Connected!")
+        print("Waiting for events... (Ctrl+C to stop)\n")
+    except Exception:
         print(f"\nERROR: Could not connect to {PORT}")
-        print("Fix: Check your COM port in Arduino IDE → Tools → Port")
+        print("Fix: Close Arduino Serial Monitor first!")
         return
 
     with open(CSV_FILE, 'a', newline='') as f:
         writer = csv.writer(f)
-
         while True:
             try:
-                # Read one line from Arduino
                 raw = ser.readline().decode('utf-8').strip()
-
-                # Only process lines that start with EVENT
                 if raw.startswith("EVENT"):
                     parts = raw.split(",")
-
                     if len(parts) == 4:
                         _, obj_id, event_type, timestamp = parts
-
-                        # Save to CSV
                         writer.writerow([obj_id, event_type, timestamp])
-                        f.flush()  # write immediately, don't buffer
+                        f.flush()
 
-                        # Print nicely
-                        icon = "📦 PICKED UP" if event_type == "PICKUP" else "📥 PUT DOWN"
-                        print(f"{icon}  |  {obj_id}  |  {timestamp}")
+                        # Print event
+                        label = {
+                            "PICKED_UP": "PICKED UP",
+                            "PUT_DOWN":  "PUT DOWN ",
+                            "PERSON":    "PERSON   "
+                        }.get(event_type, event_type)
+                        print(f"[{timestamp}] {label} | {obj_id}")
+
+                        # Grab snapshot on pickup or person detected
+                        if event_type in ["PICKED_UP", "PERSON"]:
+                           time.sleep(1)   # give ESP32 time
+                           grab_snapshot(timestamp)
 
             except KeyboardInterrupt:
                 print("\nLogger stopped.")
                 break
-            except Exception as e:
-                # Skip bad lines silently
+            except Exception:
                 continue
 
 if __name__ == "__main__":
