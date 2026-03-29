@@ -5,7 +5,7 @@
 It tracks how objects are used in real-time, logs interactions, and visualizes behavior — effectively **bridging the gap between the physical and digital world**.
 
 ----
-
+that how it work 
 ## 🚀 Features
 
 * 📦 Detects object pickup and placement using multiple sensors
